@@ -19,6 +19,50 @@ from PIL import Image
 from urllib.parse import quote_plus
 import pickle
 from datetime import datetime
+import os
+import random
+import shutil
+from kaggle.api.kaggle_api_extended import KaggleApi
+import streamlit as st
+
+# ─── 1. Kaggle API Setup ───
+os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["sadogra027"]
+os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["1e7e2bf0c75f8b09a965827e08913644"]
+
+api = KaggleApi()
+api.authenticate()
+
+DATASET_SLUG = "paultimothymooney/chest-xray-pneumonia"
+DOWNLOAD_DIR = "data"
+SAMPLED_DIR = "sampled_data"
+
+# ─── 2. Download Dataset ───
+if not os.path.exists(DOWNLOAD_DIR):
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    with st.spinner("⬇️ Downloading dataset from Kaggle..."):
+        api.dataset_download_files(DATASET_SLUG, path=DOWNLOAD_DIR, unzip=True)
+    st.success("✅ Dataset downloaded and extracted!")
+
+# ─── 3. Balanced 50% Sampling ───
+def sample_balanced(src, dst, fraction=0.5):
+    for root, _, files in os.walk(src):
+        if files:  # class folder
+            count = max(1, int(len(files) * fraction))
+            selected = random.sample(files, count)
+            rel = os.path.relpath(root, src)
+            target = os.path.join(dst, rel)
+            os.makedirs(target, exist_ok=True)
+            for f in selected:
+                shutil.copy(os.path.join(root, f), os.path.join(target, f))
+
+# Apply sampling for train, val, test
+for split in ["train", "val", "test"]:
+    src_split = os.path.join(DOWNLOAD_DIR, "chest_xray", split)
+    dst_split = os.path.join(SAMPLED_DIR, split)
+    if os.path.isdir(src_split):
+        sample_balanced(src_split, dst_split, fraction=0.5)
+
+st.success(f"🎉 Balanced dataset (50%) created at: {SAMPLED_DIR}")
 
 # Resolve default dataset directories relative to this script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -883,3 +927,4 @@ st.markdown(
     - Advanced visualizations: sentiment distributions, misinformation rates, and simulation trends
     """
 )
+
